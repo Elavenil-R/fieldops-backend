@@ -20,4 +20,4 @@ class Job(Base):
             "priority IN ('High', 'Medium', 'Low')",
             name="check_priority_valid"
         ),
-    )
+    )                                           
