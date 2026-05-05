@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Literal
 from datetime import datetime
 
@@ -8,6 +8,13 @@ class JobCreate(BaseModel):
     location: str
     issue: str
     priority: Literal["High", "Medium", "Low"]
+
+    @field_validator("customer_name", "location", "issue")
+    @classmethod
+    def field_must_not_be_empty(cls, value):
+        if value is None or value.strip() == "":
+            raise ValueError("Field cannot be empty")
+        return value.strip()
 
 
 class JobResponse(BaseModel):
@@ -21,4 +28,4 @@ class JobResponse(BaseModel):
     updated_at: datetime
 
     class Config:
-        from_attributes = True  
+        from_attributes = True

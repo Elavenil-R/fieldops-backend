@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.database import get_db
 from app import models, schemas
@@ -10,95 +11,169 @@ router = APIRouter(
 )
 
 
-@router.post("/jobs/")
+@router.post("/jobs/", status_code=status.HTTP_200_OK)
 def create_job(job: schemas.JobCreate, db: Session = Depends(get_db)):
-    print(" CREATE JOB API CALLED")
-    print("Received data:", job)
+    """
+    Create a new job.
 
-    new_job = models.Job(
-        customer_name=job.customer_name,
-        location=job.location,
-        issue=job.issue,
-        priority=job.priority,
-    )
+    PostgreSQL automatically generates a unique job ID
+    because id is SERIAL / primary key in the jobs table.
 
-    db.add(new_job)
-    db.commit()
-    db.refresh(new_job)
+    Success: 200
+    Bad request: 400
+    Database/server error: 500
+    """
 
-    print(" Saved job ID:", new_job.id)
+    try:
+        new_job = models.Job(
+            customer_name=job.customer_name,
+            location=job.location,
+            issue=job.issue,
+            priority=job.priority,
+        )
 
-    return {
-        "message": "Job created successfully",
-        "job": {
-            "id": new_job.id,
-            "customer_name": new_job.customer_name,
-            "location": new_job.location,
-            "issue": new_job.issue,
-            "priority": new_job.priority,
-            "status": new_job.status,
-            "created_at": new_job.created_at,
-            "updated_at": new_job.updated_at,
-        },
-    }
+        db.add(new_job)
+        db.commit()
+
+        # Get auto-generated ID from PostgreSQL
+        db.refresh(new_job)
+
+        return {
+            "message": "Job created successfully",
+            "job_id": new_job.id,
+            "job": {
+                "id": new_job.id,
+                "customer_name": new_job.customer_name,
+                "location": new_job.location,
+                "issue": new_job.issue,
+                "priority": new_job.priority,
+                "status": new_job.status,
+                "created_at": new_job.created_at,
+                "updated_at": new_job.updated_at,
+            },
+        }
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred while creating job"
+        )
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred"
+        )
 
 
 @router.get("/jobs/")
 def get_all_jobs(db: Session = Depends(get_db)):
-    jobs = db.query(models.Job).order_by(models.Job.id.desc()).all()
+    try:
+        jobs = db.query(models.Job).order_by(models.Job.id.desc()).all()
 
-    return {
-        "message": "Jobs fetched successfully",
-        "count": len(jobs),
-        "jobs": jobs,
-    }
+        return {
+            "message": "Jobs fetched successfully",
+            "count": len(jobs),
+            "jobs": jobs,
+        }
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred while fetching jobs"
+        )
 
 
 @router.get("/jobs/{job_id}")
 def get_job_by_id(job_id: int, db: Session = Depends(get_db)):
-    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    try:
+        job = db.query(models.Job).filter(models.Job.id == job_id).first()
 
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Job not found"
+            )
 
-    return {
-        "message": "Job fetched successfully",
-        "job": job,
-    }
+        return {
+            "message": "Job fetched successfully",
+            "job": job,
+        }
+
+    except HTTPException:
+        raise
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred while fetching job"
+        )
 
 
 @router.put("/jobs/{job_id}")
 def update_job(job_id: int, job_data: schemas.JobCreate, db: Session = Depends(get_db)):
-    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    try:
+        job = db.query(models.Job).filter(models.Job.id == job_id).first()
 
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Job not found"
+            )
 
-    job.customer_name = job_data.customer_name
-    job.location = job_data.location
-    job.issue = job_data.issue
-    job.priority = job_data.priority
+        job.customer_name = job_data.customer_name
+        job.location = job_data.location
+        job.issue = job_data.issue
+        job.priority = job_data.priority
 
-    db.commit()
-    db.refresh(job)
+        db.commit()
+        db.refresh(job)
 
-    return {
-        "message": "Job updated successfully",
-        "job": job,
-    }
+        return {
+            "message": "Job updated successfully",
+            "job": job,
+        }
+
+    except HTTPException:
+        raise
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred while updating job"
+        )
 
 
 @router.delete("/jobs/{job_id}")
 def delete_job(job_id: int, db: Session = Depends(get_db)):
-    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    try:
+        job = db.query(models.Job).filter(models.Job.id == job_id).first()
 
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Job not found"
+            )
 
-    db.delete(job)
-    db.commit()
+        deleted_job_id = job.id
 
-    return {
-        "message": "Job deleted successfully",
-        "deleted_job_id": job_id,
-    }
+        db.delete(job)
+        db.commit()
+
+        return {
+            "message": "Job deleted successfully",
+            "deleted_job_id": deleted_job_id,
+        }
+
+    except HTTPException:
+        raise
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred while deleting job"
+        )
