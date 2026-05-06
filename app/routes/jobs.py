@@ -30,6 +30,7 @@ def create_job(job: schemas.JobCreate, db: Session = Depends(get_db)):
             location=job.location,
             issue=job.issue,
             priority=job.priority,
+            status="active"
         )
 
         db.add(new_job)
@@ -133,7 +134,16 @@ def update_job(job_id: int, job_data: schemas.JobCreate, db: Session = Depends(g
 
         return {
             "message": "Job updated successfully",
-            "job": job,
+            "job": {
+                "id": job.id,
+                "customer_name": job.customer_name,
+                "location": job.location,
+                "issue": job.issue,
+                "priority": job.priority,
+                "status": job.status,
+                "created_at": job.created_at,
+                "updated_at": job.updated_at,
+            },
         }
 
     except HTTPException:
@@ -147,8 +157,74 @@ def update_job(job_id: int, job_data: schemas.JobCreate, db: Session = Depends(g
         )
 
 
+@router.patch("/jobs/{job_id}/cancel")
+def cancel_job(job_id: int, db: Session = Depends(get_db)):
+    """
+    Cancel an existing active job.
+
+    This does not delete the job from database.
+    It only changes status from active to cancelled.
+    """
+
+    try:
+        job = db.query(models.Job).filter(models.Job.id == job_id).first()
+
+        if not job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Job not found"
+            )
+
+        if job.status == "cancelled":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Job is already cancelled"
+            )
+
+        job.status = "cancelled"
+
+        db.commit()
+        db.refresh(job)
+
+        return {
+            "message": "Job cancelled successfully",
+            "job_id": job.id,
+            "job": {
+                "id": job.id,
+                "customer_name": job.customer_name,
+                "location": job.location,
+                "issue": job.issue,
+                "priority": job.priority,
+                "status": job.status,
+                "created_at": job.created_at,
+                "updated_at": job.updated_at,
+            },
+        }
+
+    except HTTPException:
+        raise
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred while cancelling job"
+        )
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while cancelling job"
+        )
+
+
 @router.delete("/jobs/{job_id}")
 def delete_job(job_id: int, db: Session = Depends(get_db)):
+    """
+    Delete an existing job permanently from database.
+    """
+
     try:
         job = db.query(models.Job).filter(models.Job.id == job_id).first()
 
@@ -176,4 +252,11 @@ def delete_job(job_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Database error occurred while deleting job"
+        )
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while deleting job"
         )
