@@ -11,7 +11,7 @@ class Job(Base):
     location = Column(Text, nullable=False)
     issue = Column(Text, nullable=False)
     priority = Column(Text, nullable=False)
-    status = Column(Text, default="active")
+    status = Column(Text, default="pending")
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 

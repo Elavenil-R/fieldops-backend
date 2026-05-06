@@ -13,30 +13,17 @@ router = APIRouter(
 
 @router.post("/jobs/", status_code=status.HTTP_200_OK)
 def create_job(job: schemas.JobCreate, db: Session = Depends(get_db)):
-    """
-    Create a new job.
-
-    PostgreSQL automatically generates a unique job ID
-    because id is SERIAL / primary key in the jobs table.
-
-    Success: 200
-    Bad request: 400
-    Database/server error: 500
-    """
-
     try:
         new_job = models.Job(
             customer_name=job.customer_name,
             location=job.location,
             issue=job.issue,
             priority=job.priority,
-            status="active"
+            status="pending"
         )
 
         db.add(new_job)
         db.commit()
-
-        # Get auto-generated ID from PostgreSQL
         db.refresh(new_job)
 
         return {
@@ -114,7 +101,11 @@ def get_job_by_id(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/jobs/{job_id}")
-def update_job(job_id: int, job_data: schemas.JobCreate, db: Session = Depends(get_db)):
+def update_job(
+    job_id: int,
+    job_data: schemas.JobUpdate,
+    db: Session = Depends(get_db)
+):
     try:
         job = db.query(models.Job).filter(models.Job.id == job_id).first()
 
@@ -128,12 +119,14 @@ def update_job(job_id: int, job_data: schemas.JobCreate, db: Session = Depends(g
         job.location = job_data.location
         job.issue = job_data.issue
         job.priority = job_data.priority
+        job.status = job_data.status
 
         db.commit()
         db.refresh(job)
 
         return {
             "message": "Job updated successfully",
+            "job_id": job.id,
             "job": {
                 "id": job.id,
                 "customer_name": job.customer_name,
@@ -156,75 +149,16 @@ def update_job(job_id: int, job_data: schemas.JobCreate, db: Session = Depends(g
             detail="Database error occurred while updating job"
         )
 
-
-@router.patch("/jobs/{job_id}/cancel")
-def cancel_job(job_id: int, db: Session = Depends(get_db)):
-    """
-    Cancel an existing active job.
-
-    This does not delete the job from database.
-    It only changes status from active to cancelled.
-    """
-
-    try:
-        job = db.query(models.Job).filter(models.Job.id == job_id).first()
-
-        if not job:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Job not found"
-            )
-
-        if job.status == "cancelled":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Job is already cancelled"
-            )
-
-        job.status = "cancelled"
-
-        db.commit()
-        db.refresh(job)
-
-        return {
-            "message": "Job cancelled successfully",
-            "job_id": job.id,
-            "job": {
-                "id": job.id,
-                "customer_name": job.customer_name,
-                "location": job.location,
-                "issue": job.issue,
-                "priority": job.priority,
-                "status": job.status,
-                "created_at": job.created_at,
-                "updated_at": job.updated_at,
-            },
-        }
-
-    except HTTPException:
-        raise
-
-    except SQLAlchemyError:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error occurred while cancelling job"
-        )
-
     except Exception:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error occurred while cancelling job"
+            detail="Internal server error occurred while updating job"
         )
 
 
 @router.delete("/jobs/{job_id}")
 def delete_job(job_id: int, db: Session = Depends(get_db)):
-    """
-    Delete an existing job permanently from database.
-    """
-
     try:
         job = db.query(models.Job).filter(models.Job.id == job_id).first()
 

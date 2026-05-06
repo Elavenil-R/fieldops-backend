@@ -17,6 +17,21 @@ class JobCreate(BaseModel):
         return value.strip()
 
 
+class JobUpdate(BaseModel):
+    customer_name: str
+    location: str
+    issue: str
+    priority: Literal["High", "Medium", "Low"]
+    status: Literal["pending", "inprogress", "completed"]
+
+    @field_validator("customer_name", "location", "issue")
+    @classmethod
+    def field_must_not_be_empty(cls, value):
+        if value is None or value.strip() == "":
+            raise ValueError("Field cannot be empty")
+        return value.strip()
+
+
 class JobResponse(BaseModel):
     id: int
     customer_name: str
