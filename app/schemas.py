@@ -39,6 +39,8 @@ class JobResponse(BaseModel):
     issue: str
     priority: str
     status: str
+    is_deleted: bool
+    is_saved: bool
     created_at: datetime
     updated_at: datetime
 

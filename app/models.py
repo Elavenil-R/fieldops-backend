@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Text, TIMESTAMP, CheckConstraint
+from sqlalchemy import Column, Integer, Text, TIMESTAMP, CheckConstraint, Boolean
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -12,6 +12,8 @@ class Job(Base):
     issue = Column(Text, nullable=False)
     priority = Column(Text, nullable=False)
     status = Column(Text, default="pending")
+    is_deleted = Column(Boolean, default=False)
+    is_saved = Column(Boolean, default=False)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
@@ -20,4 +22,8 @@ class Job(Base):
             "priority IN ('High', 'Medium', 'Low')",
             name="check_priority_valid"
         ),
-    )                                           
+        CheckConstraint(
+            "status IN ('pending', 'inprogress', 'completed', 'cancelled')",
+            name="check_status_valid"
+        ),
+    )
